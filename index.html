@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Fx demonstration tool</title>
+    <style>
+        .positive { color: green; }
+        .negative { color: red; }
+        #upBetButton {
+            background-color: red;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+        }
+        #downBetButton {
+            background-color: blue;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-size: 16px;
+            border-radius: 5px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        #chartContainer {
+            width: 100%;
+            height: 200px;
+            margin-top: 20px;
+            border: 1px solid #ccc;
+        }
+    </style>
+    <script>
+        let balance = 0; // Googleシートから取得した残高
+        let currentValue = 151.31;
+        let startingValue = null;
+        let countdownInterval;
+        let directionBet;
+        let transactionHistory = [];
+
+        // 残高表示の更新
+        function updateBalanceDisplay() {
+            document.getElementById('balance').innerText = balance + "円";
+        }
+
+        // 値の表示更新
+        function updateValueDisplay() {
+            document.getElementById('currentValue').innerText = currentValue.toFixed(2) + "円";
+            updateDifferenceDisplay();
+        }
+
+        // 差額の表示更新
+        function updateDifferenceDisplay() {
+            if (startingValue !== null) {
+                let difference = currentValue - startingValue;
+                let differenceElement = document.getElementById('difference');
+                if (directionBet === 'up') {
+                    differenceElement.innerText = (difference > 0 ? "+" : "") + difference.toFixed(2) + "円";
+                    differenceElement.className = difference > 0 ? "positive" : "negative";
+                } else if (directionBet === 'down') {
+                    differenceElement.innerText = (difference < 0 ? "+" : "") + (-difference).toFixed(2) + "円";
+                    differenceElement.className = difference < 0 ? "positive" : "negative";
+                }
+            }
+        }
+
+        // Google Apps Script APIと通信し、ユーザーデータを取得する
+        async function login(userId, password) {
+            const response = await fetch('https://script.google.com/macros/s/AKfycbxorwcyiqIhZaFPo-trODX4rpsbmPtC4YA84I1Xhnem8TWFx1qvjGUMlAmk7VbxxFD_/exec' + userId + '&password=' + password);
+            const data = await response.json();
+
+            if (data.balance) {
+                balance = parseFloat(data.balance);
+                transactionHistory = JSON.parse(data.transactions);
+                updateBalanceDisplay();
+                displayTransactionHistory();
+            } else {
+                alert("ログインに失敗しました");
+            }
+        }
+
+        // Google Apps Script APIを通して残高と取引履歴を更新する
+        async function updateData(userId, password) {
+            const params = new URLSearchParams();
+            params.append('userId', userId);
+            params.append('password', password);
+            params.append('balance', balance);
+            params.append('transactions', JSON.stringify(transactionHistory));
+
+            const response = await fetch('https://script.google.com/macros/s/AKfycbxorwcyiqIhZaFPo-trODX4rpsbmPtC4YA84I1Xhnem8TWFx1qvjGUMlAmk7VbxxFD_/exec', {
+                method: 'POST',
+                body: params
+            });
+
+            const result = await response.text();
+            if (result === 'Success') {
+                console.log('データが正常に更新されました');
+            } else {
+                console.error('データの更新に失敗しました');
+            }
+        }
+
+        // ページ読み込み時の処理
+        window.onload = function() {
+            const canvas = document.getElementById('chartCanvas');
+            canvas.width = document.getElementById('chartContainer').clientWidth;
+            canvas.height = 200;
+        };
+    </script>
+</head>
+<body>
+    <h1>Fx demonstration tool</h1>
+    <input type="text" id="userId" placeholder="User ID">
+    <input type="password" id="password" placeholder="Password">
+    <button onclick="login(document.getElementById('userId').value, document.getElementById('password').value)">Login</button>
+
+    <p>現在の残高: <span id="balance">0円</span></p>
+    <p>現在のレート: <span id="currentValue">151.31円</span></p>
+    <div id="chartContainer">
+        <canvas id="chartCanvas"></canvas>
+    </div>
+    <p>開始レート: <span id="startingValue">-</span></p>
+    <p>差額: <span id="difference"></span></p>
+    <p>残り時間: <span id="countdown">-</span></p>
+
+    <input type="number" id="betAmount" placeholder="賭ける金額を入力" />
+    <br><br>
+    <button id="upBetButton" onclick="placeBet('up')">上(High)</button>
+    <button id="downBetButton" onclick="placeBet('down')">下(Low)</button>
+
+    <h2>取引履歴</h2>
+    <div id="historyContainer"></div>
+    <button onclick="adminAccess()">管理者専用</button>
+</body>
+</html>
